@@ -1,0 +1,18 @@
+# Sangfor XDR Mock 系统配置
+host: 0.0.0.0
+port: 8443
+
+# ak → sk 凭证对。客户端用对应 ak 签名，mock 服务端据此校验。
+# 这是 mock 专用测试凭证，非真实密钥。可任意增删。
+credentials:
+  test_ak_0001: test_sk_0001_secret
+  test_ak_0002: test_sk_0002_secret
+
+# sign-date 允许的时间偏差（秒），±15 分钟
+sign_date_window_seconds: 900
+
+# 校验严格度：normal(默认) | strict(额外字段也报错) | lenient(仅校验必填+类型)
+validate_strictness: normal
+
+# 样例数据根目录（相对于项目根）
+data_root: ../DataOpenDocument
