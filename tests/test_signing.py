@@ -7,7 +7,14 @@ from pathlib import Path
 
 # 加入原 SDK 路径
 _ROOT = Path(__file__).resolve().parents[1]
-_OPENAPI = _ROOT.parent / "OpenAPIDocument" / "python" / "authCodeDemo"
+_OPENAPI = (
+    _ROOT.parent
+    / "trustguard-docs"
+    / "xdr-api-data-specs"
+    / "OpenAPIDocument"
+    / "python"
+    / "authCodeDemo"
+)
 sys.path.insert(0, str(_OPENAPI))
 sys.path.insert(0, str(_ROOT))
 

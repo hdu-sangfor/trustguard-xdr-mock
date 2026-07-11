@@ -10,7 +10,12 @@ sys.path.insert(0, str(_ROOT))
 
 from app.validators.registry import validate_record  # noqa: E402
 
-_DATA = _ROOT.parent / "DataOpenDocument"
+_DATA = (
+    _ROOT.parent
+    / "trustguard-docs"
+    / "xdr-api-data-specs"
+    / "DataOpenDocument"
+)
 
 SPECS = {
     "DNS日志": "DNS日志规范/DNS日志样例数据.txt",

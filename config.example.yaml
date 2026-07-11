@@ -1,0 +1,18 @@
+# Sangfor XDR Mock 示例配置
+host: 0.0.0.0
+port: 8443
+
+# 仅供本地 Mock 和自动化测试使用，不要填写生产 AK/SK。
+credentials:
+  test_ak_0001: test_sk_0001_secret
+  test_ak_0002: test_sk_0002_secret
+
+# sign-date 允许的时间偏差（秒），默认 ±15 分钟。
+sign_date_window_seconds: 900
+
+# normal | strict | lenient
+validate_strictness: normal
+
+# 默认假设 trustguard-xdr-mock 与 trustguard-docs 位于同一父目录。
+# 部署环境可使用 XDR_DATA_ROOT 环境变量覆盖。
+data_root: ../trustguard-docs/xdr-api-data-specs/DataOpenDocument

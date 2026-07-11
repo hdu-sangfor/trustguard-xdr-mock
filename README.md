@@ -9,30 +9,152 @@
 2. **严格格式校验**：两层校验（pydantic 字段级 + 业务规则/状态机/链路），67 条真实样例全部通过
 3. **接口服务**：六类数据查询 + 校验 + 导出，完整 AK/SK 签名校验
 
-## 安装
+## 部署前提：先克隆 trustguard-docs
 
-```bash
-cd xdr-mock
-pip install -r requirements.txt
+XDR Mock 不在代码仓库中重复保存厂商规范和官方样例。运行前必须先取得
+`trustguard-docs`，其中的 `DataOpenDocument` 是查询、生成和完整规范回归测试的
+数据来源。
+
+请将 `trustguard-docs` 和 `trustguard-xdr-mock` 克隆到**同一个父目录**。
+`trustguard-docs` 如果是私有仓库，需要先确认当前 GitHub 账号或 SSH Key 具有读取权限。
+
+PowerShell：
+
+```powershell
+New-Item -ItemType Directory -Force trustguard-workspace | Out-Null
+Set-Location trustguard-workspace
+
+# 必须先克隆资料仓库
+git clone git@github.com:hdu-sangfor/trustguard-docs.git
+
+# 再克隆 XDR Mock
+git clone https://github.com/hdu-sangfor/trustguard-xdr-mock.git
 ```
 
-## 启动
+Linux/macOS：
 
 ```bash
-cd xdr-mock
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8443
+mkdir -p trustguard-workspace
+cd trustguard-workspace
+
+# 必须先克隆资料仓库
+git clone git@github.com:hdu-sangfor/trustguard-docs.git
+
+# 再克隆 XDR Mock
+git clone https://github.com/hdu-sangfor/trustguard-xdr-mock.git
 ```
 
-访问 `http://localhost:8443/docs` 查看接口文档（无需签名）。
+期望目录结构：
 
-## 配置
+```text
+trustguard-workspace/
+├── trustguard-docs/
+│   └── xdr-api-data-specs/
+│       ├── DataOpenDocument/
+│       └── OpenAPIDocument/
+└── trustguard-xdr-mock/
+    ├── app/
+    ├── tests/
+    └── config.example.yaml
+```
 
-编辑 `config.yaml`：
+部署前可以确认数据目录存在。
+
+PowerShell：
+
+```powershell
+Test-Path .\trustguard-docs\xdr-api-data-specs\DataOpenDocument
+```
+
+Linux/macOS：
+
+```bash
+test -d ./trustguard-docs/xdr-api-data-specs/DataOpenDocument
+```
+
+结果必须为 `True` 或退出码 `0`。如果目录不存在，服务仍可能启动，但样例查询、
+模拟生成和部分测试将没有可用数据。
+
+## 安装依赖
+
+PowerShell：
+
+```powershell
+Set-Location .\trustguard-xdr-mock
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+Linux/macOS：
+
+```bash
+cd trustguard-xdr-mock
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+## 配置 DataOpenDocument
+
+首次运行先复制示例配置：
+
+```powershell
+Copy-Item config.example.yaml config.yaml
+```
+
+Linux/macOS：
+
+```bash
+cp config.example.yaml config.yaml
+```
+
+`config.yaml` 是本地配置并被 Git 忽略；共享默认值维护在
+`config.example.yaml`。可编辑本地 `config.yaml`：
 
 - `credentials`：ak → sk 凭证对（客户端用对应 ak 签名）
 - `sign_date_window_seconds`：签名时间窗口（默认 ±15 分钟）
 - `validate_strictness`：校验严格度
-- `data_root`：样例数据根目录（默认指向同级 `../DataOpenDocument`）
+- `data_root`：样例数据根目录，默认指向
+  `../trustguard-docs/xdr-api-data-specs/DataOpenDocument`
+
+默认配置要求两个仓库保持前述同级布局：
+
+```yaml
+data_root: ../trustguard-docs/xdr-api-data-specs/DataOpenDocument
+```
+
+容器、CI 或自定义仓库布局可使用环境变量覆盖：
+
+```powershell
+$env:XDR_DATA_ROOT = 'D:\path\to\DataOpenDocument'
+```
+
+Linux/macOS：
+
+```bash
+export XDR_DATA_ROOT=/absolute/path/to/DataOpenDocument
+```
+
+环境变量优先级高于 `config.yaml`。使用绝对路径时不要求两个仓库位于同一父目录。
+
+## 启动
+
+确认当前目录是 `trustguard-xdr-mock`，且虚拟环境已激活：
+
+```bash
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8443
+```
+
+启动后检查：
+
+```text
+http://localhost:8443/health
+http://localhost:8443/docs
+http://localhost:8443/openapi.json
+```
+
+接口文档和健康检查无需签名，业务接口需要 AK/SK 签名。
 
 ## 签名
 
@@ -169,6 +291,7 @@ xdr-mock/
 │   ├── api/            # routes_query/validate/export + responses
 │   ├── config.py / main.py
 ├── tests/
-├── config.yaml
+├── config.example.yaml # 可追踪的配置模板
+├── config.yaml         # 本地配置，Git 忽略
 └── requirements.txt
 ```

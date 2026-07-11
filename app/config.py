@@ -2,6 +2,7 @@
 """mock 系统配置加载。"""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import yaml
 
@@ -15,6 +16,7 @@ DEFAULT_CONFIG = {
     },
     "sign_date_window_seconds": 900,  # ±15 分钟
     "validate_strictness": "normal",  # normal | strict | lenient
+    "data_root": "../trustguard-docs/xdr-api-data-specs/DataOpenDocument",
 }
 
 _CONFIG = None
@@ -36,6 +38,9 @@ def load_config(path: str | Path | None = None) -> dict:
         # 深度合并：credentials 整体替换
         for k, v in user.items():
             cfg[k] = v
+    # 容器、CI 和非标准仓库布局优先使用环境变量，避免修改本地配置文件。
+    if os.getenv("XDR_DATA_ROOT"):
+        cfg["data_root"] = os.environ["XDR_DATA_ROOT"]
     _CONFIG = cfg
     return cfg
 

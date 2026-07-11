@@ -32,6 +32,8 @@ pip-wheel-metadata/
 .env
 .env.*
 !.env.example
+config.yaml
+!config.example.yaml
 *.pem
 *.key
 
