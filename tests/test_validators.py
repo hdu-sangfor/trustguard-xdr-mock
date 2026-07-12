@@ -8,14 +8,11 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT))
 
+from app.config import data_root  # noqa: E402
 from app.validators.registry import validate_record  # noqa: E402
 
-_DATA = (
-    _ROOT.parent
-    / "trustguard-docs"
-    / "xdr-api-data-specs"
-    / "DataOpenDocument"
-)
+# 与运行时共用解析，支持 XDR_DATA_ROOT 覆盖（CI/容器场景）
+_DATA = data_root()
 
 SPECS = {
     "DNS日志": "DNS日志规范/DNS日志样例数据.txt",

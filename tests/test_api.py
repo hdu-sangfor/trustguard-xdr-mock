@@ -38,6 +38,14 @@ def _sign(method: str, path: str, body=None) -> dict:
 def test_health_no_sign():
     r = client.get("/health")
     assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "ok"
+    assert len(data["signDate"]) == 16
+    assert data["signDate"].endswith("Z")
+    assert "T" in data["serverTime"]
+    assert data["serverTimeUtc"].endswith("Z")
+    assert isinstance(data["timezoneOffsetSeconds"], int)
+    assert r.headers["cache-control"] == "no-store"
 
 
 def test_query_alerts():

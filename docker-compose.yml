@@ -1,0 +1,14 @@
+services:
+  xdr-mock:
+    build: .
+    image: trustguard-xdr-mock:latest
+    container_name: trustguard-xdr-mock
+    environment:
+      # 指向挂载点内的 DataOpenDocument；OpenAPIDocument 作为兄弟目录一并可见
+      XDR_DATA_ROOT: /data/DataOpenDocument
+    volumes:
+      # 规范数据只读挂载，不打入镜像。默认按 README 的同级目录布局。
+      - ../trustguard-docs/xdr-api-data-specs:/data:ro
+    ports:
+      - "8443:8443"
+    restart: unless-stopped

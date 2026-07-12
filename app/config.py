@@ -49,3 +49,30 @@ def get_config() -> dict:
     if _CONFIG is None:
         load_config()
     return _CONFIG
+
+
+def data_root() -> Path:
+    """解析样例数据根目录（DataOpenDocument）为绝对路径。
+
+    支持相对路径（相对项目根）与绝对路径；`XDR_DATA_ROOT` 已在 load_config 生效。
+    运行时与测试共用此函数，保证解析口径一致。
+    """
+    cfg = get_config()
+    project_root = Path(__file__).resolve().parents[1]  # xdr-mock/
+    configured = Path(cfg["data_root"])
+    if configured.is_absolute():
+        return configured.resolve()
+    return (project_root / configured).resolve()
+
+
+def ensure_data_root() -> Path:
+    """启动时校验样例数据目录存在，缺失则给出可操作的报错。"""
+    root = data_root()
+    if not root.is_dir():
+        raise RuntimeError(
+            f"样例数据目录不存在: {root}\n"
+            "请设置环境变量 XDR_DATA_ROOT 指向 trustguard-docs 的 "
+            "xdr-api-data-specs/DataOpenDocument，"
+            "或将 trustguard-docs 克隆到与本项目同级的父目录。"
+        )
+    return root

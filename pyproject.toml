@@ -1,0 +1,22 @@
+[project]
+name = "trustguard-xdr-mock"
+version = "1.0.0"
+description = "深信服 Sangfor XDR 平台 mock 系统：样例输出 + 严格校验 + 接口服务"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.6",
+    "PyYAML>=6.0",
+    "pycryptodome>=3.20",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+    "requests>=2.31",
+]
+
+[tool.uv]
+package = false

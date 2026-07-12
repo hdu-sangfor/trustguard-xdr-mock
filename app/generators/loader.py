@@ -3,25 +3,10 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from ..config import get_config
+from ..config import data_root as _data_root
 
 _CACHE: dict[str, list[dict]] = {}
-
-
-def _data_root() -> Path:
-    cfg = get_config()
-    root = Path(__file__).resolve().parents[2]  # xdr-mock/
-    configured = Path(
-        cfg.get(
-            "data_root",
-            "../trustguard-docs/xdr-api-data-specs/DataOpenDocument",
-        )
-    )
-    if configured.is_absolute():
-        return configured.resolve()
-    return (root / configured).resolve()
 
 
 # 规范键 → 样例文件名

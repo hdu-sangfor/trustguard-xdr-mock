@@ -77,23 +77,16 @@ test -d ./trustguard-docs/xdr-api-data-specs/DataOpenDocument
 
 ## 安装依赖
 
-PowerShell：
-
-```powershell
-Set-Location .\trustguard-xdr-mock
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-```
-
-Linux/macOS：
+依赖用 [uv](https://docs.astral.sh/uv/) 管理（与 trustguard-agent 一致），版本锁定在
+`uv.lock`。`uv sync` 会自动创建 `.venv` 并按锁文件精确安装：
 
 ```bash
 cd trustguard-xdr-mock
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
+uv sync              # 运行时 + 测试依赖
+uv sync --no-dev     # 仅运行时依赖（部署场景）
 ```
+
+后续命令都可用 `uv run` 前缀在该环境中执行，无需手动 activate。
 
 ## 配置 DataOpenDocument
 
@@ -138,12 +131,38 @@ export XDR_DATA_ROOT=/absolute/path/to/DataOpenDocument
 
 环境变量优先级高于 `config.yaml`。使用绝对路径时不要求两个仓库位于同一父目录。
 
-## 启动
+启动时会校验该目录是否存在，缺失则拒绝启动并提示如何设置 `XDR_DATA_ROOT`。
 
-确认当前目录是 `trustguard-xdr-mock`，且虚拟环境已激活：
+## Docker 运行（规范数据不入镜像）
+
+镜像只打包代码，`DataOpenDocument` 通过 volume 挂载注入——既符合「不在仓库重复保存
+厂商规范」的原则，也避免镜像与某个 docs 版本死锁。默认仍按同级目录布局：
 
 ```bash
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8443
+docker compose up --build
+```
+
+`docker-compose.yml` 把 `../trustguard-docs/xdr-api-data-specs` 只读挂到容器 `/data`，
+并设 `XDR_DATA_ROOT=/data/DataOpenDocument`（`OpenAPIDocument` 作为兄弟目录一并可见）。
+
+若 docs 不在默认位置，覆盖挂载源即可：
+
+```bash
+docker run --rm -p 8443:8443 \
+  -v /abs/path/to/xdr-api-data-specs:/data:ro \
+  -e XDR_DATA_ROOT=/data/DataOpenDocument \
+  trustguard-xdr-mock:latest
+```
+
+与 trustguard-agent 联调时，把上述 service 片段并入 agent 的 `docker-compose.yml`
+即可让 mock 随栈一起起来。
+
+## 启动
+
+确认当前目录是 `trustguard-xdr-mock`：
+
+```bash
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8443
 ```
 
 启动后检查：
@@ -169,6 +188,14 @@ http://localhost:8443/openapi.json
 客户端可直接用原系统 SDK 签名后调用本 mock，无需改动。
 
 **关键约束**（与 readme.pdf 一致）：签名后请求不可修改；签名时的 body 字节必须与发送时完全一致。
+
+Apifox 调试可以直接使用完整前置脚本：
+
+- [`examples/apifox-pre-request-sign.js`](examples/apifox-pre-request-sign.js)
+
+脚本会先调用无需签名的 `/health` 获取服务端 `signDate`，再生成业务请求签名，
+从而自动兼容 Windows、Docker、WSL 和不同时区。Apifox 环境中需要配置
+`xdr_ak`、`xdr_sk` 两个变量。
 
 ## 接口
 
@@ -257,7 +284,7 @@ http://localhost:8443/openapi.json
 
 ```bash
 cd xdr-mock
-python -m pytest tests/ -q
+uv run pytest -q
 ```
 
 - `test_signing.py`：签名与原 SDK 字节级互通 + 端到端校验
@@ -293,5 +320,8 @@ xdr-mock/
 ├── tests/
 ├── config.example.yaml # 可追踪的配置模板
 ├── config.yaml         # 本地配置，Git 忽略
-└── requirements.txt
+├── pyproject.toml      # 依赖声明（uv）
+├── uv.lock             # 锁定的依赖版本
+├── Dockerfile          # uv 多阶段构建，数据不入镜像
+└── docker-compose.yml  # 挂载 trustguard-docs 规范数据
 ```
