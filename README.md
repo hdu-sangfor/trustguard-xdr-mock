@@ -1,13 +1,15 @@
 # Sangfor XDR Mock 系统
 
-深信服 Sangfor XDR 平台的 mock 系统，用于在无法部署原系统时进行联调与测试。
-**所有约束与规范与原系统一致**：AK/SK 签名算法字节级对齐官方 SDK，六类数据校验完全依据规范。
+深信服 Sangfor XDR 平台的状态化 mock 系统，用于在没有企业 XDR、探针和真实终端时
+进行 Agent 联调与可重复评测。AK/SK 签名算法和六类数据结构依据官方 SDK、
+`DataOpenDocument` 与 `OpenAPIDocument`；项目自定义能力使用独立命名空间，不能当作
+厂商正式接口。
 
 ## 三大功能
 
-1. **样例数据输出**：接口返回 + 批量导出 + 参数化生成
+1. **状态化 XDR 接口**：告警、事件、日志、资产、白名单与响应任务可查询和更新
 2. **严格格式校验**：两层校验（pydantic 字段级 + 业务规则/状态机/链路），67 条真实样例全部通过
-3. **接口服务**：六类数据查询 + 校验 + 导出，完整 AK/SK 签名校验
+3. **关联场景评测**：可重复播种告警、证据、资产和白名单，并隔离保存 ground truth
 
 ## 部署前提：先克隆 trustguard-docs
 
@@ -88,7 +90,7 @@ uv sync --no-dev     # 仅运行时依赖（部署场景）
 
 后续命令都可用 `uv run` 前缀在该环境中执行，无需手动 activate。
 
-## 配置 DataOpenDocument
+## 配置
 
 首次运行先复制示例配置：
 
@@ -110,6 +112,9 @@ cp config.example.yaml config.yaml
 - `validate_strictness`：校验严格度
 - `data_root`：样例数据根目录，默认指向
   `../trustguard-docs/xdr-api-data-specs/DataOpenDocument`
+- `state_db_path`：SQLite 状态库，默认 `data/xdr_mock.sqlite3`
+- `enable_mock_extensions`：是否启用显式的 Mock 查询扩展
+- `mock_admin_token`：`/mock/v1/**` 场景管理接口的第二重凭证
 
 默认配置要求两个仓库保持前述同级布局：
 
@@ -121,12 +126,16 @@ data_root: ../trustguard-docs/xdr-api-data-specs/DataOpenDocument
 
 ```powershell
 $env:XDR_DATA_ROOT = 'D:\path\to\DataOpenDocument'
+$env:XDR_STATE_DB_PATH = 'D:\state\xdr_mock.sqlite3'
+$env:XDR_MOCK_ADMIN_TOKEN = 'replace-with-a-random-secret'
 ```
 
 Linux/macOS：
 
 ```bash
 export XDR_DATA_ROOT=/absolute/path/to/DataOpenDocument
+export XDR_STATE_DB_PATH=/absolute/path/to/xdr_mock.sqlite3
+export XDR_MOCK_ADMIN_TOKEN=replace-with-a-random-secret
 ```
 
 环境变量优先级高于 `config.yaml`。使用绝对路径时不要求两个仓库位于同一父目录。
@@ -143,14 +152,17 @@ docker compose up --build
 ```
 
 `docker-compose.yml` 把 `../trustguard-docs/xdr-api-data-specs` 只读挂到容器 `/data`，
-并设 `XDR_DATA_ROOT=/data/DataOpenDocument`（`OpenAPIDocument` 作为兄弟目录一并可见）。
+并使用命名卷保存 `/state/xdr_mock.sqlite3`。`OpenAPIDocument` 作为兄弟目录一并可见。
 
 若 docs 不在默认位置，覆盖挂载源即可：
 
 ```bash
 docker run --rm -p 8443:8443 \
   -v /abs/path/to/xdr-api-data-specs:/data:ro \
+  -v xdr-mock-state:/state \
   -e XDR_DATA_ROOT=/data/DataOpenDocument \
+  -e XDR_STATE_DB_PATH=/state/xdr_mock.sqlite3 \
+  -e XDR_MOCK_ADMIN_TOKEN=replace-with-a-random-secret \
   trustguard-xdr-mock:latest
 ```
 
@@ -197,32 +209,72 @@ Apifox 调试可以直接使用完整前置脚本：
 从而自动兼容 Windows、Docker、WSL 和不同时区。Apifox 环境中需要配置
 `xdr_ak`、`xdr_sk` 两个变量。
 
-## 接口
+## 接口边界
 
-所有 `/api/xdr/v1/` 接口需签名（`/health`、`/docs` 除外）。
+除 `/health`、`/docs` 和 `/openapi.json` 外，所有接口都要求 AK/SK 签名。
+实现依据为
+`trustguard-docs/xdr-api-data-specs/OpenAPIDocument/深信服XDR平台接口开放列表.html`；
+“兼容”表示路径、方法、主要请求字段和响应分页结构与该离线官方文档对齐，不表示已覆盖
+官方全部 129 个接口。
 
-### 查询（GET，分页 + 时间过滤 + 可选生成）
+### 1. 官方兼容层：`/api/xdr/v1/**`
+
+Agent 在 `official` 模式下只使用这一层。
+
+| 接口 | 当前实现 |
+|---|---|
+| `POST /alerts/list`、`POST /incidents/list` | 分页、时间、ID、IP、资产、严重级别等过滤 |
+| `POST /securitylog/list` | 端点与网络安全日志查询 |
+| `POST /analysislog/networksecurity/list` | 网络安全日志查询 |
+| `GET /alerts/{uuid}/proof`、`GET /incidents/{uuid}/proof` | 证据详情 |
+| `POST /alerts/dealstatus`、`POST /incidents/dealstatus` | 状态化处置，跨请求保留 |
+| `POST/PUT/DELETE /assets/list` | 资产查询、写入、删除 |
+| `POST /whitelists/list`、`POST /whitelists` | 白名单查询与创建 |
+| `PUT /whitelists/{id}`、`PUT /whitelists/{id}/status` | 白名单更新与启停 |
+| `DELETE /whitelists` | 白名单删除，DELETE 请求体参与签名 |
+| `POST /responses/blockiprule/{network\|endpoint\|unblock\|reblock\|list\|detail}` | 封禁规则生命周期 |
+| `POST /responses/virusscantask`、`GET /responses/virusscantask/{taskId}` | 查杀任务状态机 |
+
+分页响应同时返回官方文档常见的 `data.item` 和旧 Mock 使用的 `data.list` 别名；
+顶层同时返回 `message` 和 `msg`。新代码优先读取 `item`、`message`。
+
+### 2. Agent 开发扩展：`/api/trustguard-mock/v1/query/**`
+
+该层不是官方接口，响应带 `x-mock-extension: true`。仅当 Connector 配置为
+`mock_extended` 时使用：
 
 | 接口 | 说明 |
 |---|---|
-| `GET /api/xdr/v1/alerts/list` | 安全告警 |
-| `GET /api/xdr/v1/incidents/list` | 安全事件 |
-| `GET /api/xdr/v1/dns/list` | DNS 日志 |
-| `GET /api/xdr/v1/endpoint_security/list` | 端点安全日志 |
-| `GET /api/xdr/v1/endpoint_behavior/list` | 终端行为日志 |
-| `GET /api/xdr/v1/network_security/list` | 网络安全日志 |
-| `GET /api/xdr/v1/assets/list` | 资产列表（对齐 SDK demo） |
-| `GET /api/xdr/v1/assets/department` | 部门 |
+| `POST /query/dns` | DNS 原始日志查询 |
+| `POST /query/endpoint-security` | 端点安全原始日志查询 |
+| `POST /query/endpoint-behavior` | 终端行为日志查询 |
+| `POST /query/whitelist-match` | 用告警上下文执行 Mock 白名单匹配 |
 
-为兼容官方 OpenAPI，另提供以下 POST 查询入口（请求参数放在 JSON body）：
+官方文档没有 `/api/xdr/v1/whitelists/match`、`/api/xdr/v1/history/alerts/list`，
+本项目不会伪造这两个官方路径。历史研判结论应由 TrustGuard Evidence 存储。
+
+### 3. 测试编排层：`/mock/v1/**`
+
+这一层要求 AK/SK 和 `X-Mock-Admin-Token`，只供测试驱动程序调用，Agent 禁止访问。
 
 | 接口 | 说明 |
 |---|---|
-| `POST /api/xdr/v1/alerts/list` | 官方风格安全告警查询 |
-| `POST /api/xdr/v1/incidents/list` | 官方风格安全事件查询 |
-| `POST /api/xdr/v1/assets/list` | 官方风格资产查询 |
+| `GET /scenarios` | 查看可用场景 |
+| `POST /scenarios/{scenarioId}:seed` | 幂等播种关联数据 |
+| `POST /scenarios:reset` | 清除所有场景数据并重置虚拟时钟 |
+| `POST /clock:advance` | 推进任务状态所用虚拟时钟 |
+| `GET /scenarios/{scenarioId}/timeline` | 查看完整场景时间线 |
+| `GET /scenarios/{scenarioId}/ground-truth` | 获取评测标准答案 |
 
-参数：`page`、`pageSize`、`startTimestamp`、`endTimestamp`、`generate=true`（返回参数化生成数据）、`count`。
+内置 `false-positive-powershell-001`：已审批的资产盘点 PowerShell 脚本触发告警，
+关联两条端点日志、资产 `17820`、白名单 `WL-PS-001` 和审批单
+`CHG-2026-0718-001`。Agent 收到的是官方告警/资产/白名单响应及显式 Mock 日志响应，
+不会收到 ground truth。
+
+### 4. 旧版调试兼容入口
+
+`GET /api/xdr/v1/{data_type}/list`、`/validate/**` 和 `/export/**` 是早期 Mock
+调试能力，并非官方 OpenAPI。为了不破坏已有脚本暂时保留；新 Connector 不应依赖它们。
 
 ### 校验（POST，返回校验报告）
 
@@ -290,6 +342,7 @@ uv run pytest -q
 - `test_signing.py`：签名与原 SDK 字节级互通 + 端到端校验
 - `test_validators.py`：67 条样例全部通过 + 反例检测
 - `test_api.py`：接口端到端
+- `test_stateful_mock.py`：状态持久化、权限边界、关联误报场景与任务生命周期
 
 ## 客户端调用示例
 
@@ -298,9 +351,12 @@ from app.signing.signer import Signature
 import requests, json
 
 sig = Signature(ak="test_ak_0001", sk="test_sk_0001_secret")
-url = "https://localhost:8443/api/xdr/v1/alerts/list?page=1&pageSize=5"
-headers = sig.sign_headers("GET", url, headers={"content-type": "application/json"}, body=None)
-r = requests.get(url, headers=headers, verify=False)
+url = "https://localhost:8443/api/xdr/v1/alerts/list"
+body_bytes = json.dumps({"page": 1, "pageSize": 5}).encode("utf-8")
+headers = sig.sign_headers(
+    "POST", url, headers={"content-type": "application/json"}, body=body_bytes
+)
+r = requests.post(url, data=body_bytes, headers=headers, verify=False)
 print(r.json())
 ```
 
@@ -315,7 +371,9 @@ xdr-mock/
 │   ├── models/         # 六类 pydantic 模型 + enums + process_chain
 │   ├── validators/     # logtrace/time/state_machine/enum_check/registry
 │   ├── generators/     # loader/synthetic/exporter
-│   ├── api/            # routes_query/validate/export + responses
+│   ├── api/            # 官方兼容、Mock 扩展、场景管理路由
+│   ├── repositories/   # SQLite 状态仓库
+│   ├── scenarios/      # 可重复关联场景与 ground truth
 │   ├── config.py / main.py
 ├── tests/
 ├── config.example.yaml # 可追踪的配置模板

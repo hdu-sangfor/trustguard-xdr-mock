@@ -17,6 +17,12 @@ DEFAULT_CONFIG = {
     "sign_date_window_seconds": 900,  # ±15 分钟
     "validate_strictness": "normal",  # normal | strict | lenient
     "data_root": "../trustguard-docs/xdr-api-data-specs/DataOpenDocument",
+    # 状态化 Mock 使用标准库 SQLite；相对路径以项目根目录为准。
+    "state_db_path": "data/xdr_mock.sqlite3",
+    # 仅 /mock/v1/** 管理接口使用。不要在 Agent/Connector 中配置此值。
+    "mock_admin_token": "mock_admin_token_change_me",
+    # 是否开放 /api/trustguard-mock/v1/query/** 开发扩展。
+    "enable_mock_extensions": True,
 }
 
 _CONFIG = None
@@ -41,6 +47,14 @@ def load_config(path: str | Path | None = None) -> dict:
     # 容器、CI 和非标准仓库布局优先使用环境变量，避免修改本地配置文件。
     if os.getenv("XDR_DATA_ROOT"):
         cfg["data_root"] = os.environ["XDR_DATA_ROOT"]
+    if os.getenv("XDR_STATE_DB_PATH"):
+        cfg["state_db_path"] = os.environ["XDR_STATE_DB_PATH"]
+    if os.getenv("XDR_MOCK_ADMIN_TOKEN"):
+        cfg["mock_admin_token"] = os.environ["XDR_MOCK_ADMIN_TOKEN"]
+    if os.getenv("XDR_ENABLE_MOCK_EXTENSIONS"):
+        cfg["enable_mock_extensions"] = os.environ[
+            "XDR_ENABLE_MOCK_EXTENSIONS"
+        ].strip().lower() in {"1", "true", "yes", "on"}
     _CONFIG = cfg
     return cfg
 
@@ -76,3 +90,13 @@ def ensure_data_root() -> Path:
             "或将 trustguard-docs 克隆到与本项目同级的父目录。"
         )
     return root
+
+
+def state_db_path() -> Path:
+    """解析状态数据库路径，并保证父目录存在。"""
+    configured = Path(get_config()["state_db_path"])
+    if not configured.is_absolute():
+        configured = Path(__file__).resolve().parents[1] / configured
+    resolved = configured.resolve()
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    return resolved

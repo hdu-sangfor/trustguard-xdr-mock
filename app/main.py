@@ -11,7 +11,12 @@ from .api import responses
 from .api.routes_query import router as query_router
 from .api.routes_validate import router as validate_router
 from .api.routes_export import router as export_router
+from .api.routes_extensions import router as extensions_router
+from .api.routes_mock import router as mock_router
+from .api.routes_official import router as official_router
+from .api.dependencies import require_mock_admin, require_mock_extensions_enabled
 from .config import ensure_data_root
+from .repositories import get_repository
 from .signing.verifier import verify_request_async
 
 
@@ -19,13 +24,14 @@ from .signing.verifier import verify_request_async
 async def lifespan(app: FastAPI):
     # 启动即校验规范数据在场，缺失则拒绝启动并给出可操作提示
     ensure_data_root()
+    get_repository()
     yield
 
 
 app = FastAPI(
     title="Sangfor XDR Mock",
-    description="深信服 XDR 平台 mock 系统：样例输出 + 严格校验 + 接口服务",
-    version="1.0.0",
+    description="深信服 XDR 状态化 Mock：官方兼容接口 + 显式开发扩展 + 关联场景评测",
+    version="1.1.0",
     lifespan=lifespan,
 )
 
@@ -48,5 +54,14 @@ async def health(response: Response):
 
 # 所有业务路由都依赖签名校验
 app.include_router(query_router, dependencies=[Depends(verify_request_async)])
+app.include_router(official_router, dependencies=[Depends(verify_request_async)])
 app.include_router(validate_router, dependencies=[Depends(verify_request_async)])
 app.include_router(export_router, dependencies=[Depends(verify_request_async)])
+app.include_router(
+    extensions_router,
+    dependencies=[Depends(verify_request_async), Depends(require_mock_extensions_enabled)],
+)
+app.include_router(
+    mock_router,
+    dependencies=[Depends(verify_request_async), Depends(require_mock_admin)],
+)

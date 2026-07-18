@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from . import responses
 from ..generators.loader import load_samples
 from ..generators.synthetic import generate as gen_synthetic
+from ..repositories import get_repository
 
 router = APIRouter(prefix="/api/xdr/v1", tags=["query"])
 
@@ -21,12 +22,6 @@ _TYPE_MAP = {
     "endpoint_behavior": "终端行为日志",
     "network_security": "网络安全日志",
 }
-
-_ASSETS = [
-    {"assetId": "A12345678", "hostIp": "192.168.75.35", "name": "demo-host"},
-    {"assetId": "A12345679", "hostIp": "10.0.0.30", "name": "demo-host2"},
-]
-
 
 def _error(message: str, status_code: int) -> JSONResponse:
     return JSONResponse(
@@ -86,14 +81,14 @@ async def _json_object(request: Request) -> dict | JSONResponse:
 
 
 # 必须在 /{data_type}/list 之前声明，否则 GET /assets/list 会被动态路由捕获。
-@router.get("/assets/list")
+@router.get("/assets/list", include_in_schema=False, deprecated=True)
 async def assets_list(
     page: int = Query(1, ge=1),
     pageSize: int = Query(10, ge=1, le=500),
 ):
     """SDK demo 使用的 GET 兼容接口。"""
-    start = (page - 1) * pageSize
-    return responses.page(_ASSETS[start:start + pageSize], len(_ASSETS), page, pageSize)
+    records, total = get_repository().list_assets({"page": page, "pageSize": pageSize})
+    return responses.page(records, total, page, pageSize)
 
 
 @router.post("/assets/list")
@@ -108,17 +103,9 @@ async def assets_list_official(request: Request):
     except (TypeError, ValueError):
         return _error("page and pageSize must be integers", 400)
 
-    assets = list(_ASSETS)
-    asset_ids = obj.get("assetIds")
-    if isinstance(asset_ids, list) and asset_ids:
-        wanted = {str(value) for value in asset_ids}
-        assets = [asset for asset in assets if asset["assetId"] in wanted]
-    ip = str(obj.get("ip") or "").strip()
-    if ip:
-        assets = [asset for asset in assets if ip in asset["hostIp"]]
-
-    start = (page - 1) * page_size
-    return responses.page(assets[start:start + page_size], len(assets), page, page_size)
+    obj["page"], obj["pageSize"] = page, page_size
+    assets, total = get_repository().list_assets(obj)
+    return responses.page(assets, total, page, page_size)
 
 
 @router.get("/assets/department")
@@ -145,23 +132,18 @@ async def _official_list(data_type: str, request: Request):
         page_size = min(500, max(1, int(obj.get("pageSize", 20))))
         start_ts = int(obj["startTimestamp"]) if obj.get("startTimestamp") is not None else None
         end_ts = int(obj["endTimestamp"]) if obj.get("endTimestamp") is not None else None
-        count = int(obj["count"]) if obj.get("count") is not None else None
     except (TypeError, ValueError):
         return _error("invalid pagination or timestamp parameter", 400)
-    if count is not None and not 1 <= count <= 10000:
-        return _error("count must be between 1 and 10000", 400)
-    return _records_page(
-        spec_key=_TYPE_MAP[data_type],
-        page=page,
-        page_size=page_size,
-        start_timestamp=start_ts,
-        end_timestamp=end_ts,
-        generate=bool(obj.get("generate", False)),
-        count=count,
+    if start_ts is not None and end_ts is not None and start_ts > end_ts:
+        return _error("startTimestamp must be <= endTimestamp", 400)
+    obj.update(
+        {"page": page, "pageSize": page_size, "startTimestamp": start_ts, "endTimestamp": end_ts}
     )
+    records, total = get_repository().list_records(data_type, obj)
+    return responses.page(records, total, page, page_size)
 
 
-@router.get("/{data_type}/list")
+@router.get("/{data_type}/list", include_in_schema=False, deprecated=True)
 async def list_data(
     data_type: str,
     page: int = Query(1, ge=1),

@@ -31,7 +31,7 @@ def _error(message: str, status_code: int) -> JSONResponse:
     )
 
 
-@router.post("/{data_type}")
+@router.post("/{data_type}", openapi_extra={"x-mock-extension": True})
 async def validate_one(data_type: str, request: Request):
     """校验单条数据，返回校验报告。"""
     if data_type not in _TYPE_MAP:
@@ -48,7 +48,7 @@ async def validate_one(data_type: str, request: Request):
     return responses.ok(report)
 
 
-@router.post("/batch/{data_type}")
+@router.post("/batch/{data_type}", openapi_extra={"x-mock-extension": True})
 async def validate_batch(data_type: str, request: Request):
     """批量校验。body: {"records": [...]}."""
     if data_type not in _TYPE_MAP:

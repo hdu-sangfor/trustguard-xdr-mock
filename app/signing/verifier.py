@@ -108,7 +108,7 @@ def verify_request(request: Request) -> str:
 
     # 读取 body（已由 FastAPI 缓存需小心；此处用 receive 读取原始字节）
     body_bytes = b""
-    if method in ("POST", "PUT", "PATCH"):
+    if method in ("POST", "PUT", "PATCH", "DELETE"):
         body_bytes = yield_from_body(request)
 
     canonical = C.build_canonical(
@@ -193,7 +193,11 @@ async def verify_request_async(request: Request) -> str:
     raw_query = request.url.query
     query = C.query_transform_from_raw(raw_query)
 
-    body_bytes = await _read_body(request) if method in ("POST", "PUT", "PATCH") else b""
+    body_bytes = (
+        await _read_body(request)
+        if method in ("POST", "PUT", "PATCH", "DELETE")
+        else b""
+    )
 
     canonical = C.build_canonical(
         method, path, query, header_str, signed_headers_str, body_bytes

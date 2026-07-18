@@ -35,6 +35,7 @@ COPY config.example.yaml ./config.yaml
 
 # 规范数据目录：把 trustguard-docs/xdr-api-data-specs 挂到 /data
 ENV XDR_DATA_ROOT=/data/DataOpenDocument
+ENV XDR_STATE_DB_PATH=/state/xdr_mock.sqlite3
 
 EXPOSE 8443
 

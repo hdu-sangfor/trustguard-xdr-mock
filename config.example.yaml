@@ -16,3 +16,12 @@ validate_strictness: normal
 # 默认假设 trustguard-xdr-mock 与 trustguard-docs 位于同一父目录。
 # 部署环境可使用 XDR_DATA_ROOT 环境变量覆盖。
 data_root: ../trustguard-docs/xdr-api-data-specs/DataOpenDocument
+
+# 状态化 Mock 的 SQLite 数据库。容器内建议覆盖为 /state/xdr_mock.sqlite3。
+state_db_path: data/xdr_mock.sqlite3
+
+# 仅 /mock/v1/** 场景管理接口使用；部署时务必通过环境变量覆盖。
+mock_admin_token: mock_admin_token_change_me
+
+# 是否开放显式标记为非官方的查询扩展。
+enable_mock_extensions: true

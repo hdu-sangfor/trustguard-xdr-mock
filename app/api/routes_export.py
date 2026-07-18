@@ -22,7 +22,7 @@ _TYPE_MAP = {
 }
 
 
-@router.get("/{data_type}")
+@router.get("/{data_type}", openapi_extra={"x-mock-extension": True})
 async def export_data(
     data_type: str,
     count: int = Query(10, ge=1, le=10000),
